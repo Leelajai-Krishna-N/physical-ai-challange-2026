@@ -53,7 +53,6 @@ ENV UV_PYTHON_INSTALL_DIR=/opt/uv_python
 RUN mkdir -p /opt/uv_cache /opt/uv_python && \
     uv python install 3.12 && \
     uv venv $VIRTUAL_ENV --python 3.12
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
 # 8. Install PyTorch & Additional Simulation Tools inside the uv venv
 RUN uv pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121 && \
@@ -82,7 +81,9 @@ RUN mkdir -p /home/hacker/workspace/src && \
     git clone https://github.com/sahillathwal/so101_leader_moveit_config.git /home/hacker/workspace/src/so101_leader_moveit_config && \
     git clone https://github.com/sahillathwal/so101_leader_description.git /home/hacker/workspace/src/so101_leader_description && \
     git clone https://github.com/sahillathwal/so101_description.git /home/hacker/workspace/src/so101_description && \
-    git clone https://github.com/sahillathwal/so101_gazebo.git /home/hacker/workspace/src/so101_gazebo
+    git clone https://github.com/sahillathwal/so101_gazebo.git /home/hacker/workspace/src/so101_gazebo && \
+    git clone https://github.com/sahillathwal/so101_mujoco.git /home/hacker/workspace/src/so101_mujoco
+
 # 12. Configure bashrc to source ROS 2 and activate the uv environment automatically
 RUN echo "source /opt/ros/humble/setup.bash" >> /home/hacker/.bashrc && \
     echo "source /opt/lerobot_venv/bin/activate" >> /home/hacker/.bashrc
