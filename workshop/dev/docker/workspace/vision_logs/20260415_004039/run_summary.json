@@ -1,0 +1,65 @@
+{
+  "success": true,
+  "cube_center_world": [
+    0.419267162996959,
+    0.38932746809173246,
+    0.05301157419095007
+  ],
+  "cube_center_camera": [
+    -0.2223455927165184,
+    0.1243170721992553,
+    -0.4299951195716858
+  ],
+  "roi_bounds_px": [
+    0,
+    0,
+    210,
+    145
+  ],
+  "mask_area_px": 3378,
+  "depth_confidence": 1.030195381882771,
+  "validation_world": [
+    0.41,
+    0.40002830697676584,
+    0.024940650945344346
+  ],
+  "motion_plan": {
+    "home_pose": [
+      0.2,
+      0.0,
+      0.25
+    ],
+    "pick_hover": [
+      0.419267162996959,
+      0.38932746809173246,
+      0.18
+    ],
+    "pick_down": [
+      0.419267162996959,
+      0.38932746809173246,
+      0.058011574190950065
+    ],
+    "place_hover": [
+      0.32,
+      0.2,
+      0.18
+    ],
+    "place_down": [
+      0.32,
+      0.2,
+      0.05
+    ]
+  },
+  "waypoint_sequence": [
+    "home",
+    "pick_hover",
+    "pick_down",
+    "close_gripper",
+    "pick_hover",
+    "place_hover",
+    "place_down",
+    "open_gripper",
+    "place_hover",
+    "home"
+  ]
+}

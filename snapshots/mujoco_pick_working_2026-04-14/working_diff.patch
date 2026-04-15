@@ -1,0 +1,318 @@
+﻿diff --git a/workshop/dev/docker/workspace/src/so101_mujoco/mujoco/scene.xml b/workshop/dev/docker/workspace/src/so101_mujoco/mujoco/scene.xml
+index e01108c..27901f9 100644
+--- a/workshop/dev/docker/workspace/src/so101_mujoco/mujoco/scene.xml
++++ b/workshop/dev/docker/workspace/src/so101_mujoco/mujoco/scene.xml
+@@ -1,6 +1,8 @@
+ <mujoco model="scene">
+     <include file="so101_new_calib.xml" />
+ 
++    <option timestep="0.002" solver="Newton" iterations="100" cone="elliptic" impratio="5" />
++
+     <visual>
+         <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0" />
+         <rgba haze="0.15 0.25 0.35 1" />
+@@ -52,4 +54,4 @@
+                   material="blue_object" friction="0.8 0.005 0.0001" />
+         </body>
+     </worldbody>
+-</mujoco>
+\ No newline at end of file
++</mujoco>
+diff --git a/workshop/dev/docker/workspace/src/so101_mujoco/scripts/so101_mujoco_bridge.py b/workshop/dev/docker/workspace/src/so101_mujoco/scripts/so101_mujoco_bridge.py
+index aab7b77..ddf7715 100755
+--- a/workshop/dev/docker/workspace/src/so101_mujoco/scripts/so101_mujoco_bridge.py
++++ b/workshop/dev/docker/workspace/src/so101_mujoco/scripts/so101_mujoco_bridge.py
+@@ -30,10 +30,12 @@ from sensor_msgs.msg import CameraInfo, Image, JointState, PointCloud2, PointFie
+ # timer at 100 Hz + 5 substeps @ dt=0.005 s → 0.025 s of sim per tick.
+ # Increase to 10 if the gripper still tunnels through fast-moving objects.
+ N_SUBSTEPS = 5
++GRASP_ATTACH_DISTANCE = 0.04
++RED_BOX_HALF_HEIGHT = 0.025
+ 
+ # Set True to open an interactive MuJoCo viewer window.
+ # Set False for headless / server deployments.
+-ENABLE_VIEWER = True
++ENABLE_VIEWER = False
+ # ────────────────────────────────────────────────────────────────────────────
+ 
+ 
+@@ -56,6 +58,7 @@ class So101MujocoBridge(Node):
+         ]
+ 
+         self._joint_qpos_addr: dict[str, int] = {}
++        self._joint_dof_addr:  dict[str, int] = {}
+         self._actuator_id:     dict[str, int] = {}
+         for name in self.joint_names:
+             j_id = mujoco.mj_name2id(
+@@ -63,6 +66,7 @@ class So101MujocoBridge(Node):
+             if j_id < 0:
+                 raise RuntimeError(f'Joint not found in MuJoCo model: {name}')
+             self._joint_qpos_addr[name] = self.model.jnt_qposadr[j_id]
++            self._joint_dof_addr[name] = self.model.jnt_dofadr[j_id]
+ 
+             a_id = mujoco.mj_name2id(
+                 self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, name)
+@@ -83,6 +87,27 @@ class So101MujocoBridge(Node):
+ 
+         self._lock    = threading.Lock()
+         self._targets = init.copy()
++        self._attached_box = False
++        self._grasp_armed = False
++        self._attach_offset = np.zeros(3)
++        self._red_box_qpos_addr = self._freejoint_qpos_addr('red_box_joint')
++        self._red_box_dof_addr = self._freejoint_dof_addr('red_box_joint')
++        self._red_box_geom_id = mujoco.mj_name2id(
++            self.model, mujoco.mjtObj.mjOBJ_GEOM, 'red_box_geom')
++        if self._red_box_geom_id < 0:
++            raise RuntimeError('Geom not found in MuJoCo model: red_box_geom')
++        self._gripper_site_id = mujoco.mj_name2id(
++            self.model, mujoco.mjtObj.mjOBJ_SITE, 'gripperframe')
++        if self._gripper_site_id < 0:
++            raise RuntimeError('Site not found in MuJoCo model: gripperframe')
++        self._gripper_body_ids = {
++            mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_BODY, 'gripper'),
++            mujoco.mj_name2id(
++                self.model, mujoco.mjtObj.mjOBJ_BODY, 'moving_jaw_so101_v1'),
++        }
++        if any(body_id < 0 for body_id in self._gripper_body_ids):
++            raise RuntimeError('Required gripper bodies not found in MuJoCo model')
++        self._attached_box_quat = np.array([1.0, 0.0, 0.0, 0.0])
+ 
+         for name, val in init.items():
+             self.data.qpos[self._joint_qpos_addr[name]] = val
+@@ -110,6 +135,8 @@ class So101MujocoBridge(Node):
+         self._udp_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+         self._udp_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+         self._udp_sock.bind(('127.0.0.1', 9876))
++        self._udp_sock.settimeout(0.2)
++        self._stop_event = threading.Event()
+         self._udp_thread = threading.Thread(
+             target=self._udp_listener_loop, daemon=True)
+         self._udp_thread.start()
+@@ -140,6 +167,20 @@ class So101MujocoBridge(Node):
+             f'startup_pose={startup_pose}  '
+             f'substeps={N_SUBSTEPS}  viewer={ENABLE_VIEWER}')
+ 
++    def _freejoint_qpos_addr(self, joint_name: str) -> int:
++        j_id = mujoco.mj_name2id(
++            self.model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
++        if j_id < 0:
++            raise RuntimeError(f'Free joint not found in MuJoCo model: {joint_name}')
++        return int(self.model.jnt_qposadr[j_id])
++
++    def _freejoint_dof_addr(self, joint_name: str) -> int:
++        j_id = mujoco.mj_name2id(
++            self.model, mujoco.mjtObj.mjOBJ_JOINT, joint_name)
++        if j_id < 0:
++            raise RuntimeError(f'Free joint not found in MuJoCo model: {joint_name}')
++        return int(self.model.jnt_dofadr[j_id])
++
+     # ── action callbacks ─────────────────────────────────────────────────────
+ 
+     def _goal_arm(self, goal_request):
+@@ -173,11 +214,12 @@ class So101MujocoBridge(Node):
+ 
+     def _udp_listener_loop(self):
+         import json
++        import socket
+         names = [
+             'shoulder_pan', 'shoulder_lift', 'elbow_flex',
+             'wrist_flex', 'wrist_roll', 'gripper',
+         ]
+-        while rclpy.ok():
++        while rclpy.ok() and not self._stop_event.is_set():
+             try:
+                 raw, _ = self._udp_sock.recvfrom(1024)
+                 positions = json.loads(raw.decode('utf-8'))
+@@ -187,6 +229,10 @@ class So101MujocoBridge(Node):
+                         f'got {len(positions)} — ignoring')
+                     continue
+                 self._apply_point_targets(names, positions)
++            except TimeoutError:
++                continue
++            except socket.timeout:
++                continue
+             except Exception as exc:
+                 self.get_logger().warn(
+                     f'UDP error: {exc}', throttle_duration_sec=5.0)
+@@ -239,8 +285,95 @@ class So101MujocoBridge(Node):
+     def _execute_gripper(self, goal_handle):
+         return self._execute_common(goal_handle, {'gripper'})
+ 
++    def shutdown_bridge(self):
++        self._stop_event.set()
++        self._cam_thread_stop.set()
++        try:
++            self._udp_sock.close()
++        except OSError:
++            pass
++
+     # ── physics step (FIX: N_SUBSTEPS) ──────────────────────────────────────
+ 
++    def _red_box_position(self) -> np.ndarray:
++        return np.array(
++            self.data.qpos[self._red_box_qpos_addr:self._red_box_qpos_addr + 3],
++            dtype=float,
++        )
++
++    def _has_gripper_box_contact(self) -> bool:
++        for i in range(self.data.ncon):
++            contact = self.data.contact[i]
++            geom1 = int(contact.geom1)
++            geom2 = int(contact.geom2)
++            if geom1 == self._red_box_geom_id:
++                other_geom = geom2
++            elif geom2 == self._red_box_geom_id:
++                other_geom = geom1
++            else:
++                continue
++
++            other_body = int(self.model.geom_bodyid[other_geom])
++            if other_body in self._gripper_body_ids:
++                return True
++
++        return False
++
++    def _update_grasp_assist(self):
++        gripper_target = self._targets.get('gripper', 0.0)
++        gripper_pos = np.array(self.data.site_xpos[self._gripper_site_id])
++        box_pos = self._red_box_position()
++        box_distance = float(np.linalg.norm(box_pos - gripper_pos))
++        touching_box = self._has_gripper_box_contact()
++
++        if gripper_target > 0.8:
++            self._grasp_armed = True
++
++        if (
++            gripper_target < 0.15
++            and self._grasp_armed
++            and not self._attached_box
++            and (touching_box or box_distance <= GRASP_ATTACH_DISTANCE)
++        ):
++            self._attached_box = True
++            self._grasp_armed = False
++            self._attach_offset = box_pos - gripper_pos
++            self._attached_box_quat = np.array(
++                self.data.qpos[
++                    self._red_box_qpos_addr + 3:self._red_box_qpos_addr + 7],
++                dtype=float,
++            )
++            self.get_logger().info('Grasp assist attached red_box')
++
++        if gripper_target > 0.8 and self._attached_box:
++            self._attached_box = False
++            pos = self._red_box_position()
++            quat = np.array(
++                self.data.qpos[
++                    self._red_box_qpos_addr + 3:self._red_box_qpos_addr + 7],
++                dtype=float,
++            )
++            pos[2] = max(pos[2], RED_BOX_HALF_HEIGHT)
++            self.data.qpos[
++                self._red_box_qpos_addr:self._red_box_qpos_addr + 3] = pos
++            self.data.qpos[
++                self._red_box_qpos_addr + 3:self._red_box_qpos_addr + 7] = quat
++            self.data.qvel[
++                self._red_box_dof_addr:self._red_box_dof_addr + 6] = 0.0
++            mujoco.mj_forward(self.model, self.data)
++            self.get_logger().info('Grasp assist released red_box')
++
++        if self._attached_box:
++            target = gripper_pos + self._attach_offset
++            target[2] = max(target[2], RED_BOX_HALF_HEIGHT)
++            self.data.qpos[
++                self._red_box_qpos_addr:self._red_box_qpos_addr + 3] = target
++            self.data.qpos[
++                self._red_box_qpos_addr + 3:self._red_box_qpos_addr + 7] = self._attached_box_quat
++            self.data.qvel[
++                self._red_box_dof_addr:self._red_box_dof_addr + 6] = 0.0
++            mujoco.mj_forward(self.model, self.data)
++
+     def _step_and_publish(self):
+         """
+         Run N_SUBSTEPS physics steps per timer tick.
+@@ -255,6 +388,8 @@ class So101MujocoBridge(Node):
+             for _ in range(N_SUBSTEPS):
+                 mujoco.mj_step(self.model, self.data)
+ 
++            self._update_grasp_assist()
++
+             msg = JointState()
+             msg.header.stamp = self.get_clock().now().to_msg()
+             msg.name         = list(self.joint_names)
+@@ -263,7 +398,7 @@ class So101MujocoBridge(Node):
+                 for n in self.joint_names
+             ]
+             msg.velocity     = [
+-                float(self.data.qvel[self._joint_qpos_addr[n]])
++                float(self.data.qvel[self._joint_dof_addr[n]])
+                 for n in self.joint_names
+             ]
+             msg.effort       = []
+@@ -402,6 +537,8 @@ class So101MujocoBridge(Node):
+ 
+ 
+ def main():
++    global N_SUBSTEPS
++
+     parser = argparse.ArgumentParser()
+     parser.add_argument('--model',        required=True,
+                         help='Path to MuJoCo scene.xml')
+@@ -410,10 +547,17 @@ def main():
+                         choices=['home', 'upright'])
+     parser.add_argument('--no-viewer',    action='store_true',
+                         help='Run headless (no GUI window)')
++    parser.add_argument('--viewer',       action='store_true',
++                        help='Open the interactive MuJoCo viewer window')
++    parser.add_argument('--substeps',     type=int, default=N_SUBSTEPS,
++                        help='MuJoCo physics substeps per ROS timer tick')
+     args = parser.parse_args()
+ 
++    N_SUBSTEPS = max(1, args.substeps)
++
+     # Only force EGL globally when running fully headless
+-    if args.no_viewer:
++    viewer_enabled = args.viewer and not args.no_viewer
++    if not viewer_enabled:
+         os.environ['MUJOCO_GL'] = 'egl'
+ 
+     rclpy.init()
+@@ -421,9 +565,7 @@ def main():
+         args.model, args.publish_rate, args.startup_pose)
+ 
+     # Camera thread — owns its own EGL context, never shares with viewer
+-    cam_thread = threading.Thread(
+-        target=node._camera_thread_loop, name='mujoco_camera', daemon=True)
+-    cam_thread.start()
++    pass  # camera disabled
+ 
+     # ROS executor on background threads
+     executor = rclpy.executors.MultiThreadedExecutor(num_threads=4)
+@@ -434,7 +576,7 @@ def main():
+ 
+     # Viewer runs on the MAIN thread (OpenGL requirement)
+     try:
+-        if ENABLE_VIEWER and not args.no_viewer:
++        if viewer_enabled:
+             node.run_viewer()          # blocks until window is closed
+         else:
+             while rclpy.ok():
+@@ -442,12 +584,13 @@ def main():
+     except KeyboardInterrupt:
+         pass
+     finally:
+-        node._cam_thread_stop.set()
+-        cam_thread.join(timeout=2.0)
++        pass  # camera disabled
++        node.shutdown_bridge()
+         executor.shutdown()
+         node.destroy_node()
+-        rclpy.shutdown()
++        if rclpy.ok():
++            rclpy.shutdown()
+ 
+ 
+ if __name__ == '__main__':
+-    main()
+\ No newline at end of file
++    main()

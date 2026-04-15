@@ -1,0 +1,16 @@
+{
+  "episode_name": "human_demo_002",
+  "created_at_unix": 1776167279.8599281,
+  "duration_sec": 6966.246,
+  "num_samples": 69656,
+  "num_images": 9687,
+  "save_images": true,
+  "success": false,
+  "notes": "human",
+  "topics": {
+    "joint_states": "/joint_states",
+    "commanded_joint_targets": "/commanded_joint_targets",
+    "red_box_pose": "/mujoco/red_box_pose",
+    "rgb": "/d435i/image"
+  }
+}

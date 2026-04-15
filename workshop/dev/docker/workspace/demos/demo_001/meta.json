@@ -1,0 +1,16 @@
+{
+  "episode_name": "demo_001",
+  "created_at_unix": 1776189317.7853045,
+  "duration_sec": 19.021,
+  "num_samples": 189,
+  "num_images": 0,
+  "save_images": true,
+  "success": false,
+  "notes": "red box pick and place",
+  "topics": {
+    "joint_states": "/joint_states",
+    "commanded_joint_targets": "/commanded_joint_targets",
+    "red_box_pose": "/mujoco/red_box_pose",
+    "rgb": "/d435i/image"
+  }
+}

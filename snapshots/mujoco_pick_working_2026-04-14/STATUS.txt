@@ -1,0 +1,17 @@
+ M workshop/dev/docker/workspace/HACKATHON_GUIDE.md
+ M workshop/dev/docker/workspace/src/so101_mujoco/mujoco/scene.xml
+ M workshop/dev/docker/workspace/src/so101_mujoco/scripts/so101_mujoco_bridge.py
+?? .claude/
+?? codex_write_test.txt
+?? docker_ps_check.txt
+?? docker_ps_out.txt
+?? snapshots/
+?? workshop/dev/docker/workspace/auto_pick_place.py
+?? workshop/dev/docker/workspace/go_to_pose.py
+?? workshop/dev/docker/workspace/pick_and_place.py
+?? workshop/dev/docker/workspace/renders/
+?? workshop/dev/docker/workspace/run_bridge.sh
+?? workshop/dev/docker/workspace/run_pick_place.sh
+?? workshop/dev/docker/workspace/src/so101_mujoco/scripts/so101_mujoco_bridge.py.bak
+?? workshop/dev/docker/workspace/test_grasp.py
+?? workshop/dev/docker/workspace/tune_grasp.py

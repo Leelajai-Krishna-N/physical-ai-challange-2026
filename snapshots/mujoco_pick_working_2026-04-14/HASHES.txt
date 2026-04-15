@@ -1,0 +1,10 @@
+
+Algorithm Hash                                                             Path                                                                                         
+--------- ----                                                             ----                                                                                         
+SHA256    C3D97E168F3444FBAC9029C04B48A89E6EBE5E34FCE6D7C4BE1B0D2CC224D284 C:\physical-ai-challange-2026\snapshots\mujoco_pick_working_2026-04-14\so101_mujoco_bridge.py
+SHA256    ADFA8DE87F9476B1C694A4C13074AF310B75BBD6C09717E4F6C366EF26D92EDA C:\physical-ai-challange-2026\snapshots\mujoco_pick_working_2026-04-14\auto_pick_place.py    
+SHA256    063C7B12FFBB50FECCDB0936CD91EFAEA2694E0B869AC1BA6F70DECCA986090E C:\physical-ai-challange-2026\snapshots\mujoco_pick_working_2026-04-14\scene.xml             
+SHA256    96A260168D494E7EA61701AD005E1FDE78971E1AC7B26C0E98DBAB7E33E5C91B C:\physical-ai-challange-2026\snapshots\mujoco_pick_working_2026-04-14\README.md             
+
+
+

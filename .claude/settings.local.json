@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(docker exec:*)",
+      "Bash(winpty docker:*)"
+    ]
+  }
+}

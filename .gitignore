@@ -1,5 +1,10 @@
 __pycache__/
 *.log
+codex_write_test.txt
+docker_ps_check.txt
+docker_ps_out.txt
+port_forward.err
+port_forward.out
 workshop/dev/docker/workspace/MUJOCO_LOG.TXT
 workshop/dev/docker/workspace/build/
 workshop/dev/docker/workspace/install/

@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ros2 pkg *)",
+      "Bash(docker exec lerobot_hackathon_env *)",
+      "Bash(docker exec *)"
+    ]
+  }
+}

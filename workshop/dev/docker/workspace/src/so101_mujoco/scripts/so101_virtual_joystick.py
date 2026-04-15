@@ -49,14 +49,18 @@ HTML_CONTENT = """
         let axes = { x: 0.0, y: 0.0, z: 0.0 };
         let gripper_open = true;
 
-        document.getElementById('gripper_btn').addEventListener('touchstart', (e) => {
-            e.preventDefault();
+        const toggleGripper = (e) => {
+            if (e) {
+                e.preventDefault();
+            }
             gripper_open = !gripper_open;
             let btn = document.getElementById('gripper_btn');
             btn.innerText = gripper_open ? "GRIPPER: OPEN" : "GRIPPER: CLOSED";
             btn.style.background = gripper_open ? "#ff4444" : "#44ff44";
             btn.style.boxShadow = gripper_open ? "0 4px #aa0000" : "0 4px #00aa00";
-        });
+        };
+        document.getElementById('gripper_btn').addEventListener('touchstart', toggleGripper);
+        document.getElementById('gripper_btn').addEventListener('click', toggleGripper);
 
         // Left Joystick configs
         let managerLeft = nipplejs.create({

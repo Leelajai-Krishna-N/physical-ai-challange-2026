@@ -1,0 +1,16 @@
+{
+  "episode_name": "smoke_test",
+  "created_at_unix": 1776165375.0854218,
+  "duration_sec": 3.029,
+  "num_samples": 14,
+  "num_images": 0,
+  "save_images": false,
+  "success": false,
+  "notes": "smoke test",
+  "topics": {
+    "joint_states": "/joint_states",
+    "commanded_joint_targets": "/commanded_joint_targets",
+    "red_box_pose": "/mujoco/red_box_pose",
+    "rgb": "/d435i/image"
+  }
+}

@@ -33,10 +33,16 @@ source install/setup.bash
 
 ## 3. Launching the Simulation
 
-Open a terminal and run the MuJoCo bridge. This command will open the 3D viewer window and start the simulation.
+Open a terminal and run the MuJoCo bridge. The default command runs headless, which is more reliable in Docker and still accepts control commands.
 
 ```bash
 python3 src/so101_mujoco/scripts/so101_mujoco_bridge.py --model src/so101_mujoco/mujoco/scene.xml
+```
+
+If your X11/OpenGL setup is working and you want the 3D viewer, add `--viewer`:
+
+```bash
+python3 src/so101_mujoco/scripts/so101_mujoco_bridge.py --model src/so101_mujoco/mujoco/scene.xml --viewer
 ```
 
 > [!NOTE]
