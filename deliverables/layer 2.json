@@ -1,0 +1,549 @@
+{
+  "name": "layer 2",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Analyze this sensor anomaly event for machine {{ $json.body.machine_id }}:\nTime stamp: {{ $json.body.timestamp }}\n\nMachine ID: {{ $json.body.machine_id }}\ncomplete json: {{ JSON.stringify($json.body) }}\nTimestamp: {{ $json.body.timestamp }}\n\nProvide analysis in the following JSON format:\n{\n  \"current_situation\": \"text description\",\n  \"risk_score\": \"number(0-100)\",\n  \"alert\": [true/false, \"context for alert\"],\n  \"schMain\": [true/false, \"timings for scheduling maintenance\"]\n}\n\nDo not include any extra text outside the JSON.\nTo calculate the risk score:\nThe Risk Score  is  calculated on a scale of 0 to 100.\n1. The Base Intensity (The Starting Point)\nThe calculation begins by looking at the \"Distance from Normal.\"\n\nThe Logic: We take the sensor that has deviated the most from its average behavior (the highest Z-score).\n\nThe Weight: We convert that statistical distance into a 0–100 scale. If a sensor is three times more volatile than usual, it starts with a base risk of 30.\n\n2. The Multivariate Multiplier (The \"Physics\" Check)\nWe then look at how many different sensors are failing at the same time on that specific machine.\n\nThe Logic: If only one sensor is high, the risk stays low because it could be a sensor glitch.\n\nThe Weight: If two or more related sensors (like Vibration and Temperature) are both high, we add a \"Correlation Bonus\" of 20 to 30 points. This is because multiple symptoms confirm a physical reality.",
+        "options": {
+          "systemMessage": "You are the Fleet Supervisor orchestrator for a predictive maintenance system. Your role is to coordinate analysis of sensor anomalies and determine appropriate action. You only reply in the following JSON format: {\"current_situation\":\"text\", \"risk_score\":\"text\", \"alert\":[true/false, \"text\"], \"schMain\":[true/false, \"text\"]}"
+        }
+      },
+      "id": "37bc49db-9fee-4bcc-a9c3-5612163a5df0",
+      "name": "Fleet Supervisor",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        368,
+        -288
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        2304,
+        -288
+      ],
+      "id": "2aca60f9-684c-4ecf-854e-35f2f9705d34",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=This is the actual data : {{ $('Sensor Anomaly Webhook').item.json.body }}\nThis is the data from the LLM : {{ $json.toJsonString() }}\n",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "## Role\nYou are the \"Investigator Agent\" in a Hybrid Multi-Agent Predictive Maintenance System. Your task is to interpret statistical anomalies from the following machines CNC_01 , CNC_02 , PUMP_03  and CONVEYOR_04 and determine if they require maintenance or are simply noise.\n\n## Input Context\nYou will receive:\n1. **The DetectionEvent:** A JSON containing current sensor readings (Temp, Vib, RPM, Current) and their statistical Z-Scores.\n2. **The Fleet Context:** Data retrieved via the Supabase Tool showing the current state of other machines in the plant. (to get this input use the Supabase tool.\n3.You have access to Serp Web search tool to detect the environmental factors that may affect the anomaly detection. If it is an environmental factor make the risk score 0.\n\n## Logic & Thought Process (Follow these steps strictly)\n\n### Step 1: Fleet-Aware Normalization (Cross-Machine)\n- **Check for Global Trends:** Look at the Temp and Current of the other 3 pumps in Supabase.\n- **Decision:** If >2 pumps show a similar Z-score trend (e.g., all Temp Z-scores > 2.0), classify this as an 'ENVIRONMENTAL_SHIFT' (e.g., Bengaluru ambient heat).\n- **Action:** Suppress the alert; update risk score to < 30.\n\n### Step 2: Multivariate Correlation (Cross-Sensor)\nAnalyze the relationship between sensors on the triggered machine. Look for \"Failure Fingerprints\":\n- **Mechanical Friction:** High Vibration (Z > 2.5) + High Temperature (Z > 2.5). \n- **Electrical/Load Issue:** High Current (Z > 3.0) + Low/Stable RPM + Stable Temp.\n- **Sensor Glitch:** A massive Z-score in exactly one sensor while all other correlated sensors are perfectly normal (Z < 1.0).\n\n### Step 3: Drift vs. Spike Analysis\n- Check the historical window. Is the Z-score increasing steadily (Drift) or was it a one-time jump (Spike)?\n- **Decision:** Drifts are high-risk (mechanical wear). Spikes are lower risk (transient noise).\n\n### Step 4: Final Risk Score Calculation (0-100)\n- **Start at Base Score:** Max(Z-Scores) * 10.\n- **Modifier (Fleet):** If Environmental Shift, subtract 40.\n- **Modifier (Multi-Sensor):** If >2 sensors are anomalous and correlate to a failure mode, add 30.\n- **Modifier (History):** If a \"Drift\" pattern is detected in Supabase history, add 20.\n\n## Output Requirements (JSON Only)\nYou must output your decision in this structure:\n{\n  \"machine_id\": \"string\",\n  \"diagnostic_hypothesis\": \"Brief technical explanation of the physics involved\",\n  \"classification\": \"ENVIRONMENTAL\" | \"LOCALIZED_ANOMALY\" | \"SENSOR_GLITCH\" | \"NOISE\",\n  \"risk_score\": integer,\n  \"action_required\": \"NONE\" | \"ALERT\" | \"SCHEDULE_MAINTENANCE\",\n  \"reasoning_steps\": [\"Step 1 result...\", \"Step 2 result...\", \"etc.\"]\n}\ndon't add any extra text other than the json.",
+          "maxIterations": 15
+        }
+      },
+      "id": "5f83bbbe-f23a-4a86-95ad-25a62ff7af2e",
+      "name": "Fleet-Aware Reliability Engineer",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        1008,
+        -288
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "tableId": "machine_logs"
+      },
+      "id": "3262b204-926b-465d-94c9-72bea70fa20f",
+      "name": "Supabase Fleet Data Tool",
+      "type": "n8n-nodes-base.supabaseTool",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        -64
+      ],
+      "credentials": {
+        "supabaseApi": {
+          "id": "c6gcC91bRk4V9Cw7",
+          "name": "Supabase account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ljk",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "1ea8061e-ee03-4309-b8e4-cd7080c87f05",
+      "name": "Sensor Anomaly Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        144,
+        -288
+      ],
+      "webhookId": "6c85017d-0fd1-4e9f-bd99-6c05155b0d18"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n  let text = item.json.output;\n\n  text = text\n    .replace(/^```json\\s*/i, '')\n    .replace(/^```\\s*/i, '')\n    .replace(/\\s*```$/, '')\n    .trim();\n\n  const parsed = JSON.parse(text);\n\n  return {\n    json: parsed\n  };\n});"
+      },
+      "id": "f40fb051-23d5-4043-9948-322664eb57c2",
+      "name": "Parse JSON Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        -288
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.action_required }}",
+                    "rightValue": "=SCHEDULE_MAINTENANCE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "c16f9bfd-c37d-4250-9de4-5bb1057e8064"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "d97ce5b8-0663-4f3f-bbaa-ac49a42b3548",
+                    "leftValue": "={{ $json.risk_score }}",
+                    "rightValue": 50,
+                    "operator": {
+                      "type": "number",
+                      "operation": "gt"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "da7fe432-6de5-4c81-9a86-2e7e5345f169",
+                    "leftValue": "={{ $json.risk_score }}",
+                    "rightValue": 50,
+                    "operator": {
+                      "type": "number",
+                      "operation": "lt"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "f45cd230-2a87-4a51-8fac-b9eedc16ac96",
+      "name": "Route by Decision",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        1632,
+        -304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.map(item => {\n  let text = item.json.output;\n\n  text = text\n    .replace(/^```json\\s*/i, '')\n    .replace(/^```\\s*/i, '')\n    .replace(/\\s*```$/, '')\n    .trim();\n\n  const parsed = JSON.parse(text);\n\n  return {\n    json: parsed\n  };\n});"
+      },
+      "id": "e7d1295e-d99f-4996-a4ee-eb31e2410ea4",
+      "name": "Parse JSON Output1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1408,
+        -288
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "gowdadishanth2002@gmail.com",
+        "subject": "Alert",
+        "message": "=<!DOCTYPE html>\n<html>\n<head>\n    <style>\n        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; }\n        .container { max-width: 600px; margin: 20px auto; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden; }\n        .header { background-color: #d9534f; color: white; padding: 20px; text-align: center; }\n        .content { padding: 30px; }\n        .risk-badge { display: inline-block; background-color: #f2dede; color: #a94442; padding: 5px 15px; border-radius: 20px; font-weight: bold; margin-bottom: 20px; }\n        .details-table { width: 100%; border-collapse: collapse; margin: 20px 0; }\n        .details-table td { padding: 10px; border-bottom: 1px solid #f0f0f0; }\n        .details-table .label { font-weight: bold; color: #666; width: 40%; }\n        .reasoning-box { background-color: #f9f9f9; border-left: 4px solid #d9534f; padding: 15px; margin-top: 20px; font-style: italic; }\n        .footer { background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 12px; color: #777; }\n        .button { display: inline-block; padding: 12px 25px; background-color: #337ab7; color: white; text-decoration: none; border-radius: 5px; margin-top: 20px; }\n    </style>\n</head>\n<body>\n    <div class=\"container\">\n        <div class=\"header\">\n            <h1>Maintenance Scheduled</h1>\n            <p>Automated Fleet Supervisor Alert</p>\n        </div>\n        <div class=\"content\">\n            <div class=\"risk-badge\">CRITICAL RISK DETECTED</div>\n            \n            <p>Hello Team,</p>\n            <p>Our <strong>Hybrid Multi-Agent System</strong> has identified a high-probability failure pattern. A maintenance work order has been automatically generated based on the following diagnostic data:</p>\n            \n            <table class=\"details-table\">\n                <tr>\n                    <td class=\"label\">Machine ID:</td>\n                    <td><strong>{{$json.machine_id}}</strong></td>\n                </tr>\n                <tr>\n                    <td class=\"label\">Calculated Risk Score:</td>\n                    <td><strong>{{$json.risk_score}}/100</strong></td>\n                </tr>\n                <tr>\n                    <td class=\"label\">Classification:</td>\n                    <td>Localized Mechanical Failure</td>\n                </tr>\n                <tr>\n                    <td class=\"label\">Timestamp:</td>\n                    <td>{{$now}}</td>\n                </tr>\n            </table>\n\n            <h3>AI Investigator Reasoning:</h3>\n            <div class=\"reasoning-box\">\n                \"{{$json.reasoning_steps}}\"\n            </div>\n\n            <p><strong>Fleet Context:</strong> {{$json.fleet_context}}</p>\n\n            <a href=\"#\" class=\"button\">View Full Diagnostic Report</a>\n        </div>\n        <div class=\"footer\">\n            <p>Sent by <strong>Project Sentinel</strong>: Predictive Maintenance AI</p>\n            <p>BGS College of Engineering and Technology - AI & Data Science Dept.</p>\n        </div>\n    </div>\n</body>\n</html>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1856,
+        -480
+      ],
+      "id": "b30c96bc-6f97-4c2d-a1db-c48b34d863ca",
+      "name": "Send a message",
+      "webhookId": "e5fb1388-6375-4299-b74e-84ff8955530f",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gEJLai6Y6oP3zrH3",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "gowdadishanth2002@gmail.com",
+        "subject": "Alert",
+        "message": "=<!DOCTYPE html> <html> <head>     <style>         body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f9fafb; margin: 0; padding: 20px; }         .alert-card { max-width: 600px; margin: auto; background: #fff; border-radius: 8px; border: 1px solid #e5e7eb; overflow: hidden; }         .alert-status { background-color: #fef3c7; color: #92400e; padding: 10px 20px; font-size: 0.85em; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid #fde68a; }         .content { padding: 25px; }         .header-title { margin: 0; color: #111827; font-size: 1.5em; }         .machine-badge { background: #374151; color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.9em; }         .info-grid { display: flex; gap: 20px; margin: 20px 0; padding: 15px; background: #f3f4f6; border-radius: 6px; }         .info-item { flex: 1; }         .info-label { font-size: 0.75em; color: #6b7280; text-transform: uppercase; }         .info-value { font-size: 1.1em; font-weight: bold; color: #1f2937; }         .ai-note { border-left: 3px solid #f59e0b; padding-left: 15px; margin: 20px 0; color: #4b5563; line-height: 1.5; font-size: 0.95em; }         .footer { padding: 15px 25px; background: #f9fafb; border-top: 1px solid #e5e7eb; font-size: 0.8em; color: #9ca3af; text-align: center; }         .btn { display: inline-block; background: #f59e0b; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; margin-top: 10px; }     </style> </head> <body>     <div class=\"alert-card\">         <div class=\"alert-status\">⚠️ Technical Alert Triggered</div>         <div class=\"content\">             <h2 class=\"header-title\">Observation Ticket Raised</h2>             <p style=\"color: #6b7280;\">The fleet supervisor has flagged a localized anomaly on <span class=\"machine-badge\">{{$json.machine_id}}</span>.</p>                          <div class=\"info-grid\">                 <div class=\"info-item\">                     <div class=\"info-label\">Risk Score</div>                     <div class=\"info-value\">{{$json.risk_score}}/100</div>                 </div>                 <div class=\"info-item\">                     <div class=\"info-label\">Ticket ID</div>                     <div class=\"info-value\">ALT-{{$now.format('X')}}</div>                 </div>             </div>              <div class=\"ai-note\">                 <strong>Investigator Insight:</strong><br>                 \"{{$json.diagnostic_narrative}}\"             </div>              <p style=\"font-size: 0.9em;\"><strong>Fleet Awareness:</strong> {{$json.fleet_context}}</p>                          <a href=\"#\" class=\"btn\">Acknowledge Alert</a>         </div>         <div class=\"footer\">             Automated Monitoring via Project Sentinel | BGSCET AI&DS         </div>     </div> </body> </html>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1856,
+        -288
+      ],
+      "id": "8a007c77-fa2a-4383-b64f-d18dc6f7f140",
+      "name": "Send a message1",
+      "webhookId": "a222889f-b896-4142-87f8-d31bd41df308",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "gEJLai6Y6oP3zrH3",
+          "name": "Gmail OAuth2 API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"machine_id\":{{ $('Sensor Anomaly Webhook').item.json.body.machine_id }},\n\"action\":\"maintenance scheduled\",\n  \"reasoning\":{{ $('Parse JSON Output1').item.json.reasoning_steps }}\n}\n ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2080,
+        -480
+      ],
+      "id": "3112c9e3-2307-476c-a9ab-a43747334563",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"machine_id\":{{ $('Sensor Anomaly Webhook').item.json.body.machine_id }},\n\"action\":\"alerted\",\n  \"reasoning\":{{ $('Parse JSON Output1').item.json.reasoning_steps }}\n}\n ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2080,
+        -288
+      ],
+      "id": "f3638f69-6f5c-42f6-a57a-3e019b29952d",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"machine_id\":{{ $('Sensor Anomaly Webhook').item.json.body.machine_id }},\n  \"action\":\"none\",\n  \"reasoning\":{{ $('Parse JSON Output1').item.json.reasoning_steps }}\n} ",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        2080,
+        -96
+      ],
+      "id": "ab7f8ec2-6941-4887-ab9a-cb8f70630b89",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.toolSerpApi",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        -64
+      ],
+      "id": "6ef9d138-e797-461c-b359-cc536f20992b",
+      "name": "SerpAPI",
+      "credentials": {
+        "serpApi": {
+          "id": "p2DqBXIwCDFsvFaO",
+          "name": "Unnamed credential"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "llama-3.1-8b-instant",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        336,
+        -64
+      ],
+      "id": "57ae01f1-b7c4-4174-b192-a505507b6ec0",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "L5p2hp82kGNyd6UQ",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        864,
+        -80
+      ],
+      "id": "1ee527d0-be6c-4c31-8c2c-58f22d9f9ea5",
+      "name": "Groq Chat Model1",
+      "credentials": {
+        "groqApi": {
+          "id": "L5p2hp82kGNyd6UQ",
+          "name": "Groq account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Fleet Supervisor": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Supabase Fleet Data Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Fleet-Aware Reliability Engineer",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sensor Anomaly Webhook": {
+      "main": [
+        [
+          {
+            "node": "Fleet Supervisor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JSON Output": {
+      "main": [
+        [
+          {
+            "node": "Fleet-Aware Reliability Engineer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Decision": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Fleet-Aware Reliability Engineer": {
+      "main": [
+        [
+          {
+            "node": "Parse JSON Output1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JSON Output1": {
+      "main": [
+        [
+          {
+            "node": "Route by Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message1": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SerpAPI": {
+      "ai_tool": [
+        [
+          {
+            "node": "Fleet-Aware Reliability Engineer",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Fleet Supervisor",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Fleet-Aware Reliability Engineer",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "timezone": "Asia/Kolkata",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "a9e8861f-c640-41e9-8e76-a34dacd43457",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "99938929edc6a397a72ad920e0670c44e48e4c0b41e767b6ce527323a76a3b2e"
+  },
+  "id": "meBCOUJMhQxScgFw",
+  "tags": []
+}
